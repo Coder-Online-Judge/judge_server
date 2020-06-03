@@ -6,6 +6,8 @@ class Compile {
     public $sendUrl;
     public $postRequestData;
     public $fixedUrl = "http://judge-online-compiler-git-online-compiler.apps.us-east-2.starter.openshift-online.com/api.php";
+    public $inputPath;
+    public $outputPath;
 
     public function __construct(){
         $this->DB=new Database();
@@ -42,14 +44,16 @@ class Compile {
 
     public function processData(){
         if(empty($this->queueData))return;
+        $this->inputPath = $this->getTestCasePath("test_case/input/".$this->queueData['token'].".txt");
+        $this->outputPath = $this->getTestCasePath("test_case/output/".$this->queueData['token'].".txt");
 
         $postRequest = array(
             'sourceCode' => base64_encode($this->queueData['sourceCode']),
             'language' => $this->queueData['languageArgument'],
             'timeLimit' => $this->queueData['timeLimit'],
             'memoryLimit' => $this->queueData['memoryLimit'],
-            'input' => base64_encode(file_get_contents("test_case/input/".$this->queueData['token'].".txt")),
-            'expectedOutput' => base64_encode(file_get_contents("test_case/output/".$this->queueData['token'].".txt"))
+            'input' => base64_encode(file_get_contents($this->inputPath)),
+            'expectedOutput' => base64_encode(file_get_contents($this->outputPath))
         );
 
         $this->postRequestData = $postRequest;
@@ -91,13 +95,26 @@ class Compile {
             $updateData['time']=$response['time'];
             $updateData['memory']=$response['memory'];
             $this->DB->pushData("submissions","update",$updateData);
-            $inputFileName = "test_case/input/".$this->queueData['token'].".txt";
-            $outputFileName = "test_case/output/".$this->queueData['token'].".txt";
-
-            if (file_exists($inputFileName))unlink($inputFileName);
-            if (file_exists($outputFileName))unlink($outputFileName);
+            
+            if (file_exists($inputFileName))unlink($this->inputPath);
+            if (file_exists($outputFileName))unlink($this->outputPath);
 
         }
+    }
+    
+    public function getTestCasePath($path){
+        $basePath = dirname(__FILE__);
+
+        //problem for cpanel path cronjob need specefic file name otherwise its go to infinate loop
+        if (!strpos($basePath, 'wamp64') !== false)
+        {
+            $basePath = explode("/", $basePath);
+            array_pop($basePath);
+            $basePath = implode('/', $basePath);
+            $path = $basePath . '/' . $path;
+        }
+        
+        return $path;
     }
 
     public function printCompileData(){
