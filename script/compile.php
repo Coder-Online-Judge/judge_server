@@ -5,23 +5,28 @@ class Compile {
     public $sendRequestData = array();
     public $sendUrl;
     public $postRequestData;
-    public $fixedUrl = "http://judge-online-compiler-git-online-compiler.apps.us-east-2.starter.openshift-online.com/api.php";
+    public $fixedUrl = "http://compiler-online-compiler.apps.us-east-2.starter.openshift-online.com/api.php";
     public $inputPath;
     public $outputPath;
+    public $isPreviousData;
+
+    public $recursionStartTime;
 
     public function __construct(){
         $this->DB=new Database();
         $this->conn=$this->DB->conn;
     }
 
-    public function multipleCompileSubmission($totalProcess=1){
+    public function multipleCompileSubmission($isStart = true){
+
+        if($isStart)$this->recursionStartTime = strtotime($this->DB->date());
+        $now = strtotime($this->DB->date());
+        if(($now-$this->recursionStartTime)>=55)return;
 
         $this->compileSubmission();
-        
-        if($totalProcess<=20){
-            sleep(1);
-            $this->multipleCompileSubmission($totalProcess+1);
-        }
+
+        if($this->isPreviousData==0)sleep(1);
+        $this->multipleCompileSubmission(false);
 
         return;
     }
@@ -30,6 +35,8 @@ class Compile {
         $sql = "select * from submissions natural join verdict natural join languages where verdictId=1 limit 1";
         $data = $this->DB->getData($sql);
         if(isset($data[0]))$this->queueData = $data[0];
+        else $this->queueData = array();
+        $this->isPreviousData = empty($this->queueData)?0:1;
         return $this->queueData;
     }
 
@@ -37,9 +44,18 @@ class Compile {
     public function compileSubmission($customUrl = ""){
         $this->sendUrl = $customUrl == ""?$this->fixedUrl:$customUrl;
         $this->getQueueSubmissionData();
+        $this->setProcessing();
         $this->processData();
         $this->sendData();
 
+    }
+
+    public function setProcessing(){
+        if(empty($this->queueData))return;
+        $updateData = array();
+        $updateData['submissionId']=$this->queueData['submissionId'];
+        $updateData['verdictId']=2;
+        $this->DB->pushData("submissions","update",$updateData);
     }
 
     public function processData(){
@@ -99,6 +115,12 @@ class Compile {
             if (file_exists($inputFileName))unlink($this->inputPath);
             if (file_exists($outputFileName))unlink($this->outputPath);
 
+        }
+        else{
+            $updateData = array();
+            $updateData['submissionId']=$this->queueData['submissionId'];
+            $updateData['verdictId']=1;
+            $this->DB->pushData("submissions","update",$updateData);
         }
     }
     
