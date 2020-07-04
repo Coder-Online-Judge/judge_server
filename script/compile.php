@@ -5,12 +5,12 @@ class Compile {
     public $sendRequestData = array();
     public $sendUrl;
     public $threadId;
-    public $postRequestData;
+    public $postRequestData = array();
     public $inputPath;
     public $outputPath;
     public $isPreviousData;
     public $threadOverleap;
-    public $compilerData;
+    public $compilerData = array();
 
     public $recursionStartTime;
 
@@ -45,7 +45,7 @@ class Compile {
     }
 
     public function getCompiler(){
-        $sql = "select * from compiler where compilerBusy=0";
+        $sql = "select * from compiler where compilerBusy=0 and compilerOk=1";
         $data = $this->DB->getData($sql);
         //print_r($data);
 
@@ -87,7 +87,13 @@ class Compile {
         $updateData['compilerThreadId']="";
         $this->DB->pushData("compiler","update",$updateData);
     }
-
+    
+    public function resetCompileSubmission(){
+        unset($queueData);
+        unset($sendRequestData);
+        unset($postRequestData);
+        unset($compilerData);
+    }
 
     public function compileSubmission(){
         
@@ -102,6 +108,7 @@ class Compile {
             $this->sendData();
         }
         $this->resetCompiler();
+        $this->resetCompileSubmission();
     }
 
     public function customCompileSubmission($customUrl=""){
