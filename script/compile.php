@@ -4,17 +4,20 @@ class Compile {
     public $queueData = array();
     public $sendRequestData = array();
     public $sendUrl;
+    public $threadId;
     public $postRequestData;
-    public $fixedUrl = "http://compiler-online-compiler.apps.us-east-2.starter.openshift-online.com/api.php";
     public $inputPath;
     public $outputPath;
     public $isPreviousData;
+    public $threadOverleap;
+    public $compilerData;
 
     public $recursionStartTime;
 
     public function __construct(){
         $this->DB=new Database();
         $this->conn=$this->DB->conn;
+        $this->threadId = uniqid();
     }
 
     public function multipleCompileSubmission($isStart = true){
@@ -26,6 +29,7 @@ class Compile {
         $this->compileSubmission();
 
         if($this->isPreviousData==0)sleep(1);
+        else usleep(100000);
         $this->multipleCompileSubmission(false);
 
         return;
@@ -40,14 +44,72 @@ class Compile {
         return $this->queueData;
     }
 
+    public function getCompiler(){
+        $sql = "select * from compiler where compilerBusy=0";
+        $data = $this->DB->getData($sql);
+        //print_r($data);
 
-    public function compileSubmission($customUrl = ""){
-        $this->sendUrl = $customUrl == ""?$this->fixedUrl:$customUrl;
+        if(isset($data[0])){
+            $totalCompiler = count($data);
+            $selectCompiler = rand()%$totalCompiler;
+            $data = $data[$selectCompiler];
+            $this->compilerData = $data;
+
+        }
+        else $this->compilerData = array();
+        //print_r($this->compilerData); 
+    }
+
+    public function setBusyCompiler(){
+        if(empty($this->compilerData))return;
+        $updateData = array();
+        $updateData['compilerId']=$this->compilerData['compilerId'];
+        $updateData['compilerBusy']=1;
+        $updateData['compilerThreadId']=$this->threadId;
+        $this->DB->pushData("compiler","update",$updateData);
+    }
+
+    public function checkCompiler(){
+        if(empty($this->compilerData))return;
+        $compilerId = $this->compilerData['compilerId'];
+        $sql = "select compilerThreadId from compiler where compilerId=$compilerId";
+        $data = $this->DB->getData($sql);
+        $compilerThreadId = $data[0]['compilerThreadId'];
+        if($compilerThreadId!=$this->threadId)$this->sendUrl="";
+        else $this->sendUrl=$this->compilerData['compilerUrl'];
+    }
+
+    public function resetCompiler(){
+        if(empty($this->compilerData))return;
+        $updateData = array();
+        $updateData['compilerId']=$this->compilerData['compilerId'];
+        $updateData['compilerBusy']=0;
+        $updateData['compilerThreadId']="";
+        $this->DB->pushData("compiler","update",$updateData);
+    }
+
+
+    public function compileSubmission(){
+        
+        $this->getCompiler();
+        $this->setBusyCompiler();
+        $this->checkCompiler();
+       // echo $this->sendUrl;
+        if($this->sendUrl!=""){
+            $this->getQueueSubmissionData();
+            $this->setProcessing();
+            $this->processData();
+            $this->sendData();
+        }
+        $this->resetCompiler();
+    }
+
+    public function customCompileSubmission($customUrl=""){
+        $this->sendUrl = $customUrl;
         $this->getQueueSubmissionData();
         $this->setProcessing();
         $this->processData();
         $this->sendData();
-
     }
 
     public function setProcessing(){
@@ -55,11 +117,19 @@ class Compile {
         $updateData = array();
         $updateData['submissionId']=$this->queueData['submissionId'];
         $updateData['verdictId']=2;
+        $updateData['threadId']=$this->threadId;
         $this->DB->pushData("submissions","update",$updateData);
+        
+        $submissionId = $this->queueData['submissionId'];
+        $sql = "select threadId from submissions where submissionId=$submissionId";
+        $data = $this->DB->getData($sql);
+        $getThreadId = $data[0]['threadId'];
+        $this->threadOverleap = $getThreadId!=$this->threadId;
+
     }
 
     public function processData(){
-        if(empty($this->queueData))return;
+        if(empty($this->queueData) || $this->threadOverleap)return;
         $this->inputPath = $this->getTestCasePath("test_case/input/".$this->queueData['token'].".txt");
         $this->outputPath = $this->getTestCasePath("test_case/output/".$this->queueData['token'].".txt");
 
@@ -76,7 +146,7 @@ class Compile {
     }
 
     public function sendData(){
-        if(empty($this->queueData)){
+        if(empty($this->queueData) || $this->threadOverleap){
             echo "Judge Can Not Have Any Queue Submission";
             return;
         }
@@ -112,8 +182,8 @@ class Compile {
             $updateData['memory']=$response['memory'];
             $this->DB->pushData("submissions","update",$updateData);
             
-            if (file_exists($inputFileName))unlink($this->inputPath);
-            if (file_exists($outputFileName))unlink($this->outputPath);
+            if (file_exists($this->inputPath))unlink($this->inputPath);
+            if (file_exists($this->outputPath))unlink($this->outputPath);
 
         }
         else{

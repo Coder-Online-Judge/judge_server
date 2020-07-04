@@ -17,7 +17,11 @@
 	}
 	else if(isset($_POST['runCustomServer'])){
 		$serverUrl = $_POST['runCustomServer'];
-		$data = $Compile->compileSubmission($serverUrl);
+		$data = $Compile->customCompileSubmission($serverUrl);
+	}
+
+	else if(isset($_POST['loadSubmissionList'])){
+		include "page/submission_list.php";
 	}
 
 

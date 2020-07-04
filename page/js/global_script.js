@@ -37,6 +37,12 @@ function loadOfflineJudge(){
   });
 }
 
+function loadSubmissionList(){
+  $.post(url,buildData("loadSubmissionList"),function(response){
+      $("#submissionList").html(response);
+  });
+}
+
 function loadJudgeSetting(){
   openPage("loadJudgeSetting");
 }
@@ -65,3 +71,8 @@ function runCustomServer(){
 setInterval(function(){ 
   if(runServer ==1 ){runCustomServer();}
 }, 2000);
+
+
+setInterval(function(){ 
+  loadSubmissionList();
+}, 1500);
