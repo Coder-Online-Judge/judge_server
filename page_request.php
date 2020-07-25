@@ -24,5 +24,12 @@
 		include "page/submission_list.php";
 	}
 
+	else if(isset($_POST['loadJudgeCompiler'])){
+		include "page/compiler/judge_compiler_list.php";
+	}
+	else if(isset($_POST['loadCompilerList'])){
+		include "page/compiler/data_transfer_graph.php";
+	}
+
 
 ?>

@@ -36,10 +36,10 @@ class JudgeScript {
     	return $json?json_encode($data):$data;
     }
 
-
-
-
-
- 
+    public function getJudgeCompilerList($json=0){
+        $sql="select compiler.*,(select sum(dataSize) from   compiler_data_transfer where compiler.compilerId = compiler_data_transfer.compilerId) as totalDataTransfer, (select count(dataSize) from   compiler_data_transfer where compiler.compilerId = compiler_data_transfer.compilerId) as totalJudge from compiler";
+        $data=$this->DB->getData($sql);
+        return $json?json_encode($data):$data;
+    }
 }
 ?>

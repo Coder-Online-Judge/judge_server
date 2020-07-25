@@ -10,9 +10,9 @@ function buildData(keyName,val){
 }
 
 function openPage(pageName){
-	$("#dashboardBodyLoader").show();
-	$("#dashboardBody").html("");
-	$.post(url,buildData(pageName),function(response){
+  $("#dashboardBodyLoader").show();
+  $("#dashboardBody").html("");
+  $.post(url,buildData(pageName),function(response){
         $("#dashboardBodyLoader").hide();
         $("#dashboardBody").html(response);
   });
@@ -20,11 +20,15 @@ function openPage(pageName){
 
 
 function loadSubmissionPage(){
-	openPage("loadSubmissionPage");
+  openPage("loadSubmissionPage");
 }
 
 function loadGraphPage(){
-	openPage("loadGraphPage");
+  openPage("loadGraphPage");
+}
+
+function loadJudgeCompiler(){
+  openPage("loadJudgeCompiler");
 }
 
 function loadOfflineJudge(){
@@ -57,6 +61,13 @@ function startCustomServer(){
   alert("Started Offline Server");
 }
 
+function updateCompiler(e){
+
+  $.get(e.value,{},function(response){
+      $("#response").html(response);
+  });
+}
+
 function runCustomServer(){
   if(runServer == 0 || serverRunning == 1)return;
   if (typeof serverUrl == 'undefined')return;
@@ -65,11 +76,21 @@ function runCustomServer(){
   $.post(url,buildData("runCustomServer",serverUrl),function(response){
        $("#responseRunServer").html(response);
        serverRunning = 0;
-    });
+  });
+}
+
+function loadCompilerList(){
+  $.post(url,buildData("loadCompilerList"),function(response){
+      $("#compilerList").html(response);
+  });
 }
 
 setInterval(function(){ 
   if(runServer ==1 ){runCustomServer();}
+}, 2000);
+
+setInterval(function(){ 
+  loadCompilerList();
 }, 2000);
 
 

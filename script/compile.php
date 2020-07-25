@@ -11,6 +11,10 @@ class Compile {
     public $isPreviousData;
     public $threadOverleap;
     public $compilerData = array();
+    public $IOFileError = 0;
+    public $saveSuccess = 0;
+
+    public $IOFileSize = 0;
 
     public $recursionStartTime;
 
@@ -33,6 +37,36 @@ class Compile {
         $this->multipleCompileSubmission(false);
 
         return;
+    }
+
+    public function compileSubmission(){
+        
+        $this->getCompiler();
+        $this->setBusyCompiler();
+        $this->checkCompiler();
+       // echo $this->sendUrl;
+
+        if($this->sendUrl!=""){
+
+            $this->getQueueSubmissionData();
+            $this->setProcessing();
+            $this->processData();
+            $this->sendData();
+            $this->saveCompilerDataTransfer();
+            $this->resetProcessing();
+        }
+        $this->resetCompiler();
+        $this->resetCompileSubmission();
+        
+    }
+
+    public function customCompileSubmission($customUrl=""){
+        $this->sendUrl = $customUrl;
+        $this->getQueueSubmissionData();
+        $this->setProcessing();
+        $this->processData();
+        $this->sendData();
+        $this->resetProcessing();
     }
 
      public function getQueueSubmissionData(){
@@ -76,7 +110,7 @@ class Compile {
         $data = $this->DB->getData($sql);
         $compilerThreadId = $data[0]['compilerThreadId'];
         if($compilerThreadId!=$this->threadId)$this->sendUrl="";
-        else $this->sendUrl=$this->compilerData['compilerUrl'];
+        else $this->sendUrl=$this->compilerData['compilerUrl']."/api.php";
     }
 
     public function resetCompiler(){
@@ -95,30 +129,6 @@ class Compile {
         unset($compilerData);
     }
 
-    public function compileSubmission(){
-        
-        $this->getCompiler();
-        $this->setBusyCompiler();
-        $this->checkCompiler();
-       // echo $this->sendUrl;
-        if($this->sendUrl!=""){
-            $this->getQueueSubmissionData();
-            $this->setProcessing();
-            $this->processData();
-            $this->sendData();
-        }
-        $this->resetCompiler();
-        $this->resetCompileSubmission();
-    }
-
-    public function customCompileSubmission($customUrl=""){
-        $this->sendUrl = $customUrl;
-        $this->getQueueSubmissionData();
-        $this->setProcessing();
-        $this->processData();
-        $this->sendData();
-    }
-
     public function setProcessing(){
         if(empty($this->queueData))return;
         $updateData = array();
@@ -135,10 +145,30 @@ class Compile {
 
     }
 
+    public function resetProcessing(){
+        if(empty($this->queueData))return;
+        if($this->saveSuccess==0){
+            $updateData = array();
+            $updateData['submissionId']=$this->queueData['submissionId'];
+            $updateData['verdictId']=1;
+            $this->DB->pushData("submissions","update",$updateData);
+        }
+        
+        $this->saveSuccess = 0;
+        $this->IOFileError = 0;
+    }
+
     public function processData(){
         if(empty($this->queueData) || $this->threadOverleap)return;
-        $this->inputPath = $this->getTestCasePath("test_case/input/".$this->queueData['token'].".txt");
+        $this->inputPath =$this->getTestCasePath("test_case/input/".$this->queueData['token'].".txt");
         $this->outputPath = $this->getTestCasePath("test_case/output/".$this->queueData['token'].".txt");
+
+         if (!file_exists($this->inputPath) || !file_exists($this->outputPath)){
+            $this->IOFileError = 1;
+            return;
+        }
+
+        $this->IOFileSize = filesize($this->inputPath)+filesize($this->outputPath);
 
         $postRequest = array(
             'sourceCode' => base64_encode($this->queueData['sourceCode']),
@@ -153,12 +183,19 @@ class Compile {
     }
 
     public function sendData(){
-        if(empty($this->queueData) || $this->threadOverleap){
+        if(empty($this->queueData)){
             echo "Judge Can Not Have Any Queue Submission";
             return;
         }
+        if ($this->threadOverleap) {
+            echo "Judge Has Thread Overleap";
+            return;
+        }
+        if($this->IOFileError){
+            echo "Input Output File Error";
+            return;
+        }
         $this->sendSandBox();
-        
     }
 
     public function sendSandBox(){
@@ -175,38 +212,51 @@ class Compile {
 
         // $apiResponse - available data from the API request
         $response = json_decode($response,true);
-        print_r($response);
-        print_r($this->queueData);
-       // echo "<textarea>".print_r($data)."</textarea>";
-        if(isset($response['status'])){
-            $status = $response['status']['status'];
-            $statusId = $this->getStatusId($status);
-            if($statusId==0)return;
-            $updateData = array();
-            $updateData['submissionId']=$this->queueData['submissionId'];
-            $updateData['verdictId']=$statusId;
-            $updateData['time']=$response['time'];
-            $updateData['memory']=$response['memory'];
-            $this->DB->pushData("submissions","update",$updateData);
+        
+        if(!isset($response['status']))return;
             
-            if (file_exists($this->inputPath))unlink($this->inputPath);
-            if (file_exists($this->outputPath))unlink($this->outputPath);
+        $status = $response['status']['status'];
+        $statusId = $this->getStatusId($status);
+        if($statusId==0)return;
 
-        }
-        else{
-            $updateData = array();
-            $updateData['submissionId']=$this->queueData['submissionId'];
-            $updateData['verdictId']=1;
-            $this->DB->pushData("submissions","update",$updateData);
-        }
+        $updateData = array();
+        $updateData['submissionId']=$this->queueData['submissionId'];
+        $updateData['verdictId']=$statusId;
+        $updateData['time']=$response['time'];
+        $updateData['memory']=$response['memory'];
+
+        //compiler response
+        // $compilerResponse = array();
+        // $compilerResponse['compilerInfo']['conpilerId']=$this->compilerData['compilerId'];
+        // $compilerResponse['compilerInfo']['conpilerUrl']=$this->compilerData['conpilerUrl'];
+        // $compilerResponse['io']['input']=base64_decode($this->postRequestData['input']);
+        // $compilerResponse['io']['expectedOutput']=base64_decode($this->postRequestData['expectedOutput']);
+        // $compilerResponse['io']['output']=base64_decode($response['output']);
+        // $compilerResponse['status']=$response['status'];
+        //$updateData['compilerResponse']=json_encode($compilerResponse);
+            
+        $this->DB->pushData("submissions","update",$updateData);
+
+        if (file_exists($this->inputPath))unlink($this->inputPath);
+        if (file_exists($this->outputPath))unlink($this->outputPath);
+
+        $this->saveSuccess = 1;
+    }
+
+    public function saveCompilerDataTransfer(){
+        if($this->saveSuccess == 0)return;
+        $data = array();
+        $data['compilerId'] = $this->compilerData['compilerId'];
+        $data['dataSize'] = $this->IOFileSize;
+        $data['transferTime'] = $this->DB->date();
+        $this->DB->pushData("compiler_data_transfer","insert",$data);
     }
     
     public function getTestCasePath($path){
         $basePath = dirname(__FILE__);
 
         //problem for cpanel path cronjob need specefic file name otherwise its go to infinate loop
-        if (!strpos($basePath, 'wamp64') !== false)
-        {
+        if (!strpos($basePath, 'wamp64') !== false){
             $basePath = explode("/", $basePath);
             array_pop($basePath);
             $basePath = implode('/', $basePath);
@@ -229,13 +279,5 @@ class Compile {
         if(isset($data[0]))return $data[0]['verdictId'];
         return 0;
     }
-
-    
-
-
-
-
-
- 
 }
 ?>

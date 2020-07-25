@@ -71,6 +71,7 @@
 		<button class="btn btnServer btnColor1" onclick="loadGraphPage()">Judge Status Graph</button>
 		<button class="btn btnServer btnColor2" onclick="loadSubmissionPage()">Submission List</button>
 		<button class="btn btnServer btnColor3" onclick="loadJudgeSetting()">Judge Info</button>
+		<button class="btn btnServer btnColor2" onclick="loadJudgeCompiler()">Judge Compiler</button>
 		<button class="btn btnServer btnColor4" onclick="loadOfflineJudge()">Custom Judge</button>
 	</div>
 </div>
